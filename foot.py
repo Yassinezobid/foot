@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-
+ 
 # Configuration de la page
 st.set_page_config(
     page_title="SimuProfit - Business Plan Mini Football",
