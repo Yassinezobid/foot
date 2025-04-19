@@ -119,42 +119,24 @@ if 'prix_vente' not in st.session_state:
     st.session_state.nb_associes = 2
     st.session_state.nb_terrains = 1
     
-    # Initialisation des charges mensuelles
+    # Initialisation des charges mensuelles (exactement comme spécifié)
     st.session_state.charges_mensuelles = {
         "Loyer": 8000.0,
         "Électricité et eau": 3500.0,
-        "Salaires": 6000.0,
-        "Internet": 500.0,
-        "Maintenance": 1500.0,
-        "Publicité": 1000.0,
-        "Divers": 1000.0
+        "Employés": 6000.0
     }
     
-    # Initialisation des charges d'investissement
+    # Initialisation des charges d'investissement (exactement comme spécifié)
     st.session_state.charges_investissement = {
-        # Équipements
         "Avance de terrain": 40000.0,
         "Construction": 150000.0,
         "Gazon": 250000.0,
-        "Équipements sportifs": 15000.0,
-        "Caméras de surveillance": 5000.0,
-        "Caméras de filmage": 10000.0,
-        "Éclairage": 20000.0,
-        "Filets et buts": 10000.0,
-        "Tableau d'affichage": 5000.0,
-        "Système de son": 8000.0,
-
-        # Aménagement
-        "Vestiaires": 30000.0,
-        "Gradins": 20000.0,
-        "Cafétéria": 25000.0,
-        "Toilettes": 15000.0,
-        "Bureaux": 10000.0,
-
-        # Divers
         "Publicités": 20000.0,
         "Stock initial": 15000.0,
         "Social Media et App": 10000.0,
+        "Caméras de surveillance": 5000.0,
+        "Caméras de filmage": 10000.0,
+        "Divers": 5000.0,
         "Création d'association": 5000.0
     }
 
@@ -162,11 +144,7 @@ if 'prix_vente' not in st.session_state:
 charges_emojis = {
     "Loyer": "🏢",
     "Électricité et eau": "⚡",
-    "Salaires": "👨‍💼",
-    "Internet": "🌐",
-    "Maintenance": "🔧",
-    "Publicité": "📱",
-    "Divers": "📦"
+    "Employés": "👨‍💼"
 }
 
 # Sidebar masquée mais utilisable si nécessaire
@@ -182,8 +160,15 @@ def calculer_indicateurs():
     marges_services = {}
 
     for service in st.session_state.services:
-        revenus_services[service] = st.session_state.prix_vente[service] * st.session_state.commandes_jour[service] * st.session_state.jours_activite * st.session_state.nb_terrains
-        couts_services[service] = st.session_state.cout_unitaire[service] * st.session_state.commandes_jour[service] * st.session_state.jours_activite * st.session_state.nb_terrains
+        # Pour les services de location, on multiplie par le nombre de terrains
+        if service in ["Location 1 heure", "Abonnement mensuel", "Tournois", "Académie"]:
+            revenus_services[service] = st.session_state.prix_vente[service] * st.session_state.commandes_jour[service] * st.session_state.jours_activite * st.session_state.nb_terrains
+            couts_services[service] = st.session_state.cout_unitaire[service] * st.session_state.commandes_jour[service] * st.session_state.jours_activite * st.session_state.nb_terrains
+        else:
+            # Les autres services comme boissons, snacks ne dépendent pas directement du nombre de terrains
+            revenus_services[service] = st.session_state.prix_vente[service] * st.session_state.commandes_jour[service] * st.session_state.jours_activite
+            couts_services[service] = st.session_state.cout_unitaire[service] * st.session_state.commandes_jour[service] * st.session_state.jours_activite
+        
         marges_services[service] = revenus_services[service] - couts_services[service]
 
     # Calcul des totaux
@@ -196,8 +181,27 @@ def calculer_indicateurs():
     profit_net = benefice_brut - impot
     profit_par_associe = profit_net / st.session_state.nb_associes if st.session_state.nb_associes > 0 else 0
     
-    # Total des investissements
-    total_investissement = sum(st.session_state.charges_investissement.values())
+    # Total des investissements (pour un terrain)
+    total_investissement_un_terrain = sum(st.session_state.charges_investissement.values())
+    
+    # Pour le total d'investissement, multiplions par le nombre de terrains pour les éléments spécifiques aux terrains
+    investissement_specifique_terrain = (
+        st.session_state.charges_investissement["Avance de terrain"] +
+        st.session_state.charges_investissement["Construction"] +
+        st.session_state.charges_investissement["Gazon"] +
+        st.session_state.charges_investissement["Caméras de surveillance"] +
+        st.session_state.charges_investissement["Caméras de filmage"]
+    )
+    
+    investissement_commun = (
+        st.session_state.charges_investissement["Publicités"] +
+        st.session_state.charges_investissement["Stock initial"] +
+        st.session_state.charges_investissement["Social Media et App"] +
+        st.session_state.charges_investissement["Divers"] +
+        st.session_state.charges_investissement["Création d'association"]
+    )
+    
+    total_investissement = investissement_specifique_terrain * st.session_state.nb_terrains + investissement_commun
     
     # Calcul du seuil de rentabilité
     if revenu_brut > 0:
@@ -230,6 +234,7 @@ def calculer_indicateurs():
         'profit_net': profit_net,
         'profit_par_associe': profit_par_associe,
         'total_investissement': total_investissement,
+        'total_investissement_un_terrain': total_investissement_un_terrain,
         'seuil_rentabilite': seuil_rentabilite,
         'marge_cout_variable': marge_cout_variable,
         'roi_mensuel': roi_mensuel,
@@ -368,8 +373,12 @@ st.markdown('<p class="sub-header">⚽ Détails par service</p>', unsafe_allow_h
 services_data = []
 for service in st.session_state.services:
     emoji = st.session_state.services[service]
+    if service in ["Location 1 heure", "Abonnement mensuel", "Tournois", "Académie"]:
+        service_label = f"{emoji} {service} (par terrain)"
+    else:
+        service_label = f"{emoji} {service}"
     services_data.append({
-        "Service": f"{emoji} {service}",
+        "Service": service_label,
         "Service_key": service,  # Clé pour référence
         "Prix unitaire (DH)": st.session_state.prix_vente[service],
         "Coût unitaire (DH)": st.session_state.cout_unitaire[service],
@@ -435,12 +444,21 @@ services_data_updated = []
 for service in st.session_state.services:
     emoji = st.session_state.services[service]
     marge_unitaire = st.session_state.prix_vente[service] - st.session_state.cout_unitaire[service]
-    revenu_mensuel = st.session_state.prix_vente[service] * st.session_state.commandes_jour[service] * st.session_state.jours_activite * st.session_state.nb_terrains
-    cout_mensuel = st.session_state.cout_unitaire[service] * st.session_state.commandes_jour[service] * st.session_state.jours_activite * st.session_state.nb_terrains
+    
+    # Pour les services liés aux terrains, prendre en compte le nombre de terrains
+    if service in ["Location 1 heure", "Abonnement mensuel", "Tournois", "Académie"]:
+        service_label = f"{emoji} {service} (par terrain)"
+        revenu_mensuel = st.session_state.prix_vente[service] * st.session_state.commandes_jour[service] * st.session_state.jours_activite * st.session_state.nb_terrains
+        cout_mensuel = st.session_state.cout_unitaire[service] * st.session_state.commandes_jour[service] * st.session_state.jours_activite * st.session_state.nb_terrains
+    else:
+        service_label = f"{emoji} {service}"
+        revenu_mensuel = st.session_state.prix_vente[service] * st.session_state.commandes_jour[service] * st.session_state.jours_activite
+        cout_mensuel = st.session_state.cout_unitaire[service] * st.session_state.commandes_jour[service] * st.session_state.jours_activite
+    
     marge_mensuelle = revenu_mensuel - cout_mensuel
     
     services_data_updated.append({
-        "Service": f"{emoji} {service}",
+        "Service": service_label,
         "Prix unitaire (DH)": f"{st.session_state.prix_vente[service]:.2f} DH",
         "Coût unitaire (DH)": f"{st.session_state.cout_unitaire[service]:.2f} DH",
         "Marge unitaire (DH)": f"{marge_unitaire:.2f} DH",
@@ -538,18 +556,11 @@ st.markdown('<p class="sub-header">🏗️ Charges d\'investissement</p>', unsaf
 
 # Regroupement des investissements par catégorie pour une meilleure organisation
 investissements_categories = {
-    "Construction et terrain": [
-        "Avance de terrain", "Construction", "Gazon", "Éclairage", "Filets et buts",
-        "Tableau d'affichage", "Système de son"
+    "Par terrain (multiplié par le nombre de terrains)": [
+        "Avance de terrain", "Construction", "Gazon", "Caméras de surveillance", "Caméras de filmage"
     ],
-    "Équipements": [
-        "Équipements sportifs", "Caméras de surveillance", "Caméras de filmage", "Stock initial"
-    ],
-    "Aménagement": [
-        "Vestiaires", "Gradins", "Cafétéria", "Toilettes", "Bureaux"
-    ],
-    "Divers et communication": [
-        "Publicités", "Social Media et App", "Création d'association"
+    "Communs (non multiplié)": [
+        "Publicités", "Stock initial", "Social Media et App", "Divers", "Création d'association"
     ]
 }
 
@@ -596,19 +607,36 @@ with st.form(key="investissements_form"):
 # Afficher le tableau des investissements
 inv_data = []
 for categorie, items in investissements_categories.items():
+    subtotal = 0
     for item in items:
+        montant = st.session_state.charges_investissement.get(item, 0.0)
+        subtotal += montant
         inv_data.append({
             "Catégorie": categorie,
             "Investissement": item,
-            "Montant (DH)": f"{st.session_state.charges_investissement.get(item, 0.0):.2f} DH"
+            "Montant (DH)": f"{montant:.2f} DH"
+        })
+    
+    # Ajouter un sous-total pour chaque catégorie
+    if categorie == "Par terrain (multiplié par le nombre de terrains)":
+        montant_total = subtotal * st.session_state.nb_terrains
+        inv_data.append({
+            "Catégorie": categorie,
+            "Investissement": f"Sous-total ({st.session_state.nb_terrains} terrains)",
+            "Montant (DH)": f"{montant_total:.2f} DH"
+        })
+    else:
+        inv_data.append({
+            "Catégorie": categorie,
+            "Investissement": "Sous-total",
+            "Montant (DH)": f"{subtotal:.2f} DH"
         })
 
 # Ajouter une ligne de total pour les investissements
-total_inv = sum(st.session_state.charges_investissement.values())
 inv_data.append({
     "Catégorie": "",
-    "Investissement": "📊 TOTAL",
-    "Montant (DH)": f"{total_inv:.2f} DH"
+    "Investissement": "📊 TOTAL INVESTISSEMENT",
+    "Montant (DH)": f"{indicateurs['total_investissement']:.2f} DH"
 })
 
 df_inv = pd.DataFrame(inv_data)
@@ -664,4 +692,153 @@ with col2:
         st.warning("Aucune charge fixe à afficher. Veuillez définir des charges avec des montants.")
 
 # 8. Analyse de rentabilité
-st.markdown('<p class="
+st.markdown('<p class="sub-header">📈 Analyse de rentabilité</p>', unsafe_allow_html=True)
+
+col_rentab1, col_rentab2 = st.columns(2)
+
+with col_rentab1:
+    st.markdown("### 🏁 Seuil de rentabilité")
+    st.metric(
+        label="Seuil de rentabilité mensuel",
+        value=f"{indicateurs['seuil_rentabilite']:.2f} DH"
+    )
+    st.write(f"Vous devez générer au moins **{indicateurs['seuil_rentabilite']:.2f} DH** de revenus mensuels pour couvrir tous vos coûts.")
+    
+    # Progression vers le seuil de rentabilité
+    if indicateurs['revenu_brut'] > 0:
+        progress_value = min(indicateurs['revenu_brut'] / indicateurs['seuil_rentabilite'], 1.0)
+        st.progress(progress_value)
+        if progress_value >= 1.0:
+            st.success(f"✅ Vous avez dépassé le seuil de rentabilité de {(progress_value - 1.0) * 100:.1f}%!")
+        else:
+            st.warning(f"⚠️ Vous êtes à {progress_value * 100:.1f}% du seuil de rentabilité.")
+    else:
+        st.warning("⚠️ Aucun revenu n'est généré actuellement. Définissez des services actifs.")
+
+with col_rentab2:
+    st.markdown("### ⏱️ Retour sur investissement")
+    
+    if indicateurs['profit_net'] > 0:
+        st.metric(
+            label="Temps estimé pour rentabiliser l'investissement",
+            value=f"{indicateurs['temps_retour']:.1f} mois"
+        )
+        annees = int(indicateurs['temps_retour'] // 12)
+        mois_restants = int(indicateurs['temps_retour'] % 12)
+        if annees > 0:
+            st.write(f"Votre investissement total de **{indicateurs['total_investissement']:.2f} DH** sera rentabilisé en **{annees} ans et {mois_restants} mois**.")
+        else:
+            st.write(f"Votre investissement total de **{indicateurs['total_investissement']:.2f} DH** sera rentabilisé en **{mois_restants} mois**.")
+    else:
+        st.error("❌ Avec les paramètres actuels, votre activité n'est pas rentable. Ajustez vos paramètres pour générer un profit net positif.")
+
+# 9. Comparaison avec différents nombres de terrains
+st.markdown('<p class="sub-header">🔄 Comparaison du nombre de terrains</p>', unsafe_allow_html=True)
+
+# Calculer les indicateurs pour différents nombres de terrains
+max_terrains = 5
+comparaison_terrains = []
+
+for n_terrains in range(1, max_terrains + 1):
+    # Sauvegarde temporaire du nombre actuel de terrains
+    nombre_terrains_actuel = st.session_state.nb_terrains
+    
+    # Définir temporairement le nombre de terrains pour le calcul
+    st.session_state.nb_terrains = n_terrains
+    comp_indicateurs = calculer_indicateurs()
+    
+    # Restaurer le nombre de terrains d'origine
+    st.session_state.nb_terrains = nombre_terrains_actuel
+    
+    comparaison_terrains.append({
+        "Nombre de terrains": n_terrains,
+        "Revenu mensuel": comp_indicateurs['revenu_brut'],
+        "Coût total": comp_indicateurs['cout_total'],
+        "Profit net": comp_indicateurs['profit_net'],
+        "Profit par associé": comp_indicateurs['profit_par_associe'],
+        "Investissement initial": comp_indicateurs['total_investissement'],
+        "ROI mensuel": comp_indicateurs['roi_mensuel'],
+        "Temps de retour (mois)": comp_indicateurs['temps_retour'] if comp_indicateurs['profit_net'] > 0 else float('inf')
+    })
+
+df_comparaison = pd.DataFrame(comparaison_terrains)
+
+# Formater les colonnes pour un meilleur affichage
+df_comparaison["Revenu mensuel"] = df_comparaison["Revenu mensuel"].apply(lambda x: f"{x:.2f} DH")
+df_comparaison["Coût total"] = df_comparaison["Coût total"].apply(lambda x: f"{x:.2f} DH")
+df_comparaison["Profit net"] = df_comparaison["Profit net"].apply(lambda x: f"{x:.2f} DH")
+df_comparaison["Profit par associé"] = df_comparaison["Profit par associé"].apply(lambda x: f"{x:.2f} DH")
+df_comparaison["Investissement initial"] = df_comparaison["Investissement initial"].apply(lambda x: f"{x:.2f} DH")
+df_comparaison["ROI mensuel"] = df_comparaison["ROI mensuel"].apply(lambda x: f"{x:.2f}%")
+df_comparaison["Temps de retour (mois)"] = df_comparaison["Temps de retour (mois)"].apply(lambda x: f"{x:.1f}" if x != float('inf') else "N/A")
+
+st.dataframe(df_comparaison, use_container_width=True)
+
+# Graphique de comparaison des profits nets selon le nombre de terrains
+fig_comp, ax_comp = plt.subplots(figsize=(10, 6))
+x = range(1, max_terrains + 1)
+y = [comp['Profit net'] for comp in comparaison_terrains]
+y_clean = [float(val.split(' ')[0]) for val in y]  # Extraire les valeurs numériques
+
+ax_comp.bar(x, y_clean, color='#2196F3')
+ax_comp.set_xlabel('Nombre de terrains')
+ax_comp.set_ylabel('Profit net mensuel (DH)')
+ax_comp.set_title('Évolution du profit net en fonction du nombre de terrains')
+ax_comp.set_xticks(x)
+ax_comp.set_xticklabels([f'{i} terrain{"s" if i>1 else ""}' for i in x])
+
+# Ajouter les valeurs au-dessus des barres
+for i, v in enumerate(y_clean):
+    ax_comp.text(i + 1, v + 1000, f'{v:.2f} DH', ha='center')
+
+st.pyplot(fig_comp)
+
+# 10. Conclusion et recommandations
+st.markdown('<p class="sub-header">🎯 Conclusion et Recommandations</p>', unsafe_allow_html=True)
+
+with st.container():
+    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+    
+    if indicateurs['profit_net'] > 0:
+        st.success(f"✅ Avec les paramètres actuels, votre projet de mini football avec {st.session_state.nb_terrains} terrain{'s' if st.session_state.nb_terrains > 1 else ''} est rentable.")
+        
+        # Recommandations
+        st.markdown("### 💡 Recommandations")
+        
+        # Trouver le service le plus rentable
+        service_rentable = max(st.session_state.services, key=lambda s: indicateurs['marges_services'][s])
+        emoji_rentable = st.session_state.services[service_rentable]
+        
+        st.markdown(f"""
+        1. **Service le plus rentable**: Le {emoji_rentable} {service_rentable} est votre service le plus rentable. Envisagez de concentrer vos efforts marketing sur ce service.
+        
+        2. **Nombre de terrains optimal**: D'après notre simulation, {df_comparaison['Profit net'].tolist().index(max(df_comparaison['Profit net'].tolist())) + 1} terrain(s) semble être le nombre optimal pour maximiser votre rentabilité par rapport à l'investissement.
+        
+        3. **Temps de retour sur investissement**: Avec {st.session_state.nb_terrains} terrain{'s' if st.session_state.nb_terrains > 1 else ''}, vous pourriez rentabiliser votre investissement en {indicateurs['temps_retour']:.1f} mois.
+        """)
+    else:
+        st.error(f"❌ Avec les paramètres actuels, votre projet de mini football avec {st.session_state.nb_terrains} terrain{'s' if st.session_state.nb_terrains > 1 else ''} n'est pas rentable.")
+        
+        # Recommandations pour améliorer la rentabilité
+        st.markdown("### 💡 Recommandations pour améliorer la rentabilité")
+        
+        # Identifier le service avec la meilleure marge unitaire
+        meilleure_marge_service = max(st.session_state.services, key=lambda s: (st.session_state.prix_vente[s] - st.session_state.cout_unitaire[s]))
+        emoji_meilleure_marge = st.session_state.services[meilleure_marge_service]
+        
+        st.markdown(f"""
+        1. **Augmenter les prix**: Envisagez d'augmenter légèrement les prix de vos services, en particulier pour les services à forte demande.
+        
+        2. **Optimiser les coûts**: Identifiez les postes de dépenses les plus élevés et cherchez des moyens de les réduire sans compromettre la qualité.
+        
+        3. **Développer les services rentables**: Le {emoji_meilleure_marge} {meilleure_marge_service} a la meilleure marge unitaire. Concentrez vos efforts pour augmenter le nombre de commandes pour ce service.
+        
+        4. **Revoir le nombre de terrains**: Selon notre simulation, {df_comparaison['Profit net'].tolist().index(max(df_comparaison['Profit net'].tolist())) + 1} terrain(s) pourrait être plus optimal pour votre situation actuelle.
+        """)
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# Footer
+st.markdown("---")
+st.markdown("### ⚽ SimuProfit - Business Plan Mini Football")
+st.markdown("Une application pour simuler et optimiser la rentabilité de vos terrains de mini football.")
